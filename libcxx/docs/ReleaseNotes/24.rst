@@ -66,6 +66,9 @@ Improvements and New Features
 - ``std::from_chars`` for integral types in base 10 has been optimized, resulting in performance improvements of up
   to 1.9x.
 
+- ``std::from_chars`` for integral types in bases other than 10 has been optimized, resulting in performance
+  improvements of up to 10x in base 16.
+
 Deprecations and Removals
 -------------------------
 

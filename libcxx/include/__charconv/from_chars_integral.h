@@ -12,6 +12,7 @@
 
 #include <__assert>
 #include <__charconv/from_chars_result.h>
+#include <__charconv/tables.h>
 #include <__charconv/traits.h>
 #include <__config>
 #include <__system_error/errc.h>
@@ -80,16 +81,12 @@ struct _LIBCPP_HIDDEN __in_pattern_result {
   explicit _LIBCPP_CONSTEXPR_SINCE_CXX23 operator bool() const { return __ok; }
 };
 
+// A table lookup rather than range checks, so that telling digits from letters is not a branch (on random hex input
+// such a branch is mispredicted about every other character).
 template <typename _Tp>
 inline _LIBCPP_CONSTEXPR_SINCE_CXX23 __in_pattern_result __in_pattern(_Tp __c, int __base) {
-  if (__base <= 10)
-    return {'0' <= __c && __c < '0' + __base, __c - '0'};
-  else if (std::__in_pattern(__c))
-    return {true, __c - '0'};
-  else if ('a' <= __c && __c < 'a' + __base - 10)
-    return {true, __c - 'a' + 10};
-  else
-    return {'A' <= __c && __c < 'A' + __base - 10, __c - 'A' + 10};
+  int __v = __itoa::__digit_value_lut[static_cast<unsigned char>(__c)];
+  return {__v < __base, __v};
 }
 
 template <typename _It, typename _Tp, typename _Fn, typename... _Ts>
@@ -183,11 +180,15 @@ __from_chars_integral(const char* __first, const char* __last, _Tp& __value, int
         using __tl = numeric_limits<_Tp>;
         // __base is always between 2 and 36 inclusive.
         auto __digits = __tl::digits / __from_chars_log2f_lut[__b - 2];
+        // __i < __digits - 1 <=> __i < __limit, without converting __i to float on every digit
+        int __limit = static_cast<int>(__digits - 1);
+        if (static_cast<float>(__limit) < __digits - 1)
+          ++__limit;
         _Tp __x = __in_pattern(*__p++, __b).__val, __y = 0;
 
         for (int __i = 1; __p != __lastp; ++__i, ++__p) {
           if (auto __c = __in_pattern(*__p, __b)) {
-            if (__i < __digits - 1)
+            if (__i < __limit)
               __x = __x * __b + __c.__val;
             else {
               auto __res = __checked_int<_Tp>(__x) * static_cast<unsigned char>(__b);
